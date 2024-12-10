@@ -2,6 +2,7 @@
   "name": "@dififa/fbe",
   "description": "A minimialistic version of Front & Back End class for Bun.",
   "version": "0.1.0",
+  "authors": "Yulmizar",
   "module": "index.ts",
   "type": "module",
   "scripts": {
