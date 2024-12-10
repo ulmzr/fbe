@@ -10,8 +10,8 @@ declare global {
 
 type ObjectLiteral = { [key: string]: any }
 type Routes = { regex: RegExp; keys: string[]; handler: Handler }
-type Handler = (request: Request, response?: ObjectLiteral) => Promise<any> | any
-type Middleware = (request: Request, response?: ObjectLiteral, next?: Function) => Promise<any> | any
+type Handler = (req: Request, res?: ObjectLiteral) => Promise<any> | any
+type Middleware = (req: Request, res?: ObjectLiteral, next?: Function) => Promise<any> | any
 
 const json = { headers: { 'Content-Type': 'application/json' } }
 const html = { headers: { 'Content-Type': 'text/html;utf-8' } }
@@ -67,9 +67,16 @@ class Router {
         const { port = 3000 } = this.options
         const run = Bun.serve({
             port,
-            fetch: async (request, server: Server): Promise<any> => {
-                if (server.upgrade(request)) return
-                const response = (await this.serveRoute(request)) || (await this.serveStatic(request))
+            fetch: async (req, server: Server): Promise<any> => {
+                if (server.upgrade(req)) return
+                // Run middleware
+                const res = {}
+                for (const middleware of this.middlewares) {
+                    await new Promise(async (resolve) => {
+                        middleware(req, res, resolve)
+                    })
+                }
+                const response = (await this.serveRoute(req)) || (await this.serveStatic(req))
                 if (response) return response
                 return new Response('404', text)
             },
@@ -84,60 +91,60 @@ class Router {
         if (run) console.log(`Listening on ${run.url}`)
     }
 
-    async serveRoute(request: Request) {
-        const { pathname } = new URL(request.url)
-        const method = request.method
+    async serveRoute(req: Request) {
+        const { pathname } = new URL(req.url)
+        const method = req.method
         const routeList = this.routes.get(method) || []
         for (const route of routeList) {
             const matchedRoute = pathname.match(route.regex)
             if (matchedRoute) {
-                await this.populateData(request, route, matchedRoute)
-                return this.response(await route.handler(request))
+                await this.populateData(req, route, matchedRoute)
+                return this.response(await route.handler(req))
             }
         }
     }
 
-    private async populateData(request: Request, route: Routes, match: RegExpMatchArray) {
+    private async populateData(req: Request, route: Routes, match: RegExpMatchArray) {
         // Extract params
-        request.params = route.keys.reduce((acc: ObjectLiteral, key: string, index: number) => {
+        req.params = route.keys.reduce((acc: ObjectLiteral, key: string, index: number) => {
             acc[key] = match[index + 1]
             return acc
         }, {})
         // Extract query
         const query: ObjectLiteral = {}
-        new URL(request.url).searchParams.forEach((value, key) => {
+        new URL(req.url).searchParams.forEach((value, key) => {
             query[key] = value
         })
         // Extract bearer token
-        const authHeader = request.headers.get('authorization')
+        const authHeader = req.headers.get('authorization')
         if (authHeader?.startsWith('Bearer ')) {
-            request.bearerToken = authHeader.slice(7).trim()
+            req.bearerToken = authHeader.slice(7).trim()
         }
         // Extract payload
-        const contentType = request.headers.get('content-type') || ''
+        const contentType = req.headers.get('content-type') || ''
         if (contentType.includes('application/json')) {
-            request.payload = await request.json()
+            req.payload = await req.json()
         } else if (contentType.includes('form')) {
-            const formData = await request.formData()
+            const formData = await req.formData()
             formData.forEach((value, key) => {
-                request.data[key] = value
+                req.data[key] = value
             })
         } else {
-            const buffer = await request.arrayBuffer()
-            request.data = Buffer.from(buffer)
+            const buffer = await req.arrayBuffer()
+            req.data = Buffer.from(buffer)
         }
-        request.query = query
+        req.query = query
     }
 
-    async serveStatic(request: Request) {
-        if (request.method !== 'GET') return
+    async serveStatic(req: Request) {
+        if (req.method !== 'GET') return
         const addScript = async (file: any) => {
             if (!file.type.includes('html')) return file
             const body = await file.text()
             return body.replace('</head>', `${script}</head>`)
         }
         const { publicDir = 'public', livereload, spa } = this.options
-        const pathname = new URL(request.url).pathname.replace(/\/$/, 'index.html')
+        const pathname = new URL(req.url).pathname.replace(/\/$/, 'index.html')
         const index = Bun.file(join(publicDir, 'index.html'))
         const file = Bun.file(join(publicDir, pathname))
         if (await file.exists()) return this.response(livereload ? await addScript(file) : file)
