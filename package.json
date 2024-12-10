@@ -1,0 +1,23 @@
+{
+  "name": "@dififa/fbe",
+  "description": "A minimialistic version of Front & Back End class for Bun.",
+  "version": "0.1.0",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun build ./index.ts --target node --outdir ./"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.0.1",
+    "react": "^19.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ulmzr/spa-fbe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ulmzr/fbe/issues"
+  },
+  "homepage": "https://github.com/ulmzr/fbe#readme"
+}
